@@ -1,6 +1,8 @@
 # SwiftUI-TCA-Note
 The Composable Architecture 공부 노트 (SwiftUI)
 
+<img width="75%" alt="Screenshot 2023-09-01 at 2 00 58 AM" src="https://github.com/jaesung-0o0/SwiftUI-TCA-Note/assets/53814741/e308fd18-c2c9-4a2e-9628-2f1874a3f94a">
+
 # EPISODE. Standups
 
 ## Binding
