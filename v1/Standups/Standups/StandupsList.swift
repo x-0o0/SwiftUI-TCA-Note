@@ -9,7 +9,7 @@ import SwiftUI
 import ComposableArchitecture
 
 struct StandupsListFeature: Reducer {
-    struct State {
+    struct State: Equatable {
         /// - NOTE:
         /// 일반 배열은 SwiftUI에서 문제가 좀 있음.
         /// 일반 배열은 안정적인 식별자가 아닌 **위치 인덱스로 배열 요소를 참조** 하도록 강제 함
@@ -19,24 +19,57 @@ struct StandupsListFeature: Reducer {
         ///
         /// 해결방안: TCA 에서 제공하는 `IdentifiedArrayOf` 를 사용할 것
         var standups: IdentifiedArrayOf<Standup> = []
+        
+        @PresentationState var addStandup: StandupFormFeature.State?
     }
     
     enum Action {
         case addButtonTapped
+        
+        /// `PresentationAction` 에는 `dismiss` 와 `presented` 케이스가 있음
+        case addStandup(PresentationAction<StandupFormFeature.Action>)
+        
+        case cancelStandupButtonTapped
+        case saveStandupButtonTapped
     }
     
+    @Dependency(\.uuid) var uuid
+    
     var body: some ReducerOf<Self> {
+        /// Core reducer
         Reduce { state, action in
             switch action {
             case .addButtonTapped:
-                state.standups.append(
-                    Standup(
-                        id: UUID(),
-                        theme: .allCases.randomElement()!
-                    )
+                state.addStandup = StandupFormFeature.State(
+                    standup: Standup(id: self.uuid())
                 )
                 return .none
+                
+            case .addStandup:
+                return .none
+                
+            case .cancelStandupButtonTapped:
+                state.addStandup = nil
+                return .none
+                
+            case .saveStandupButtonTapped:
+                guard let standup = state.addStandup?.standup else {
+                    return .none
+                }
+                state.standups.append(standup)
+                state.addStandup = nil
+                return .none
             }
+        }
+        /// 부모-자식 간의 Feature를 통합하여 서로간의 통신이 가능
+        /// 예를 들어 부모가 언제 "참석자 추가" 버튼을 눌렀는지 알고 싶다면 아래와 같이 하면됨
+        /// ```swift
+        /// case .addStandup(.presented(.addAttendeeButtonTapped)):
+        ///     // do something
+        /// ```
+        .ifLet(\.$addStandup, action: /Action.addStandup) { // keyPath, casePath (TO-BE: #casePath(...))
+            // Destination
+            StandupFormFeature()
         }
     }
 }
@@ -52,12 +85,39 @@ struct StandupsList: View {
                         .listRowBackground(standup.theme.mainColor)
                 }
             }
-            .navigationTitle("일일 미팅")
+            .navigationTitle("일일 스탠드업")
             .toolbar {
                 ToolbarItem {
-                    Button("추가") { }
+                    Button("추가") {
+                        viewStore.send(.addButtonTapped)
+                    }
                 }
             }
+            .sheet(
+                /// `scope` 을 사용하여 `Store`의 범위를 **특정 부분에만 초점을** 맞출 수 있음
+                store: self.store.scope(
+                    state: \.$addStandup,       // keyPath
+                    action: { .addStandup($0) } // closure
+                )
+            ) { store in
+                NavigationStack {
+                    StandupForm(store: store)
+                        .navigationTitle("새로운 스탠드업")
+                        .toolbar {
+                            ToolbarItem {
+                                Button("저장") {
+                                    viewStore.send(.saveStandupButtonTapped)
+                                }
+                            }
+                            
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("취소") {
+                                    viewStore.send(.cancelStandupButtonTapped)
+                                }
+                            }
+                        }
+                }
+            } /// **스와이프로 dismiss**하면 자동으로 `state.addStandup = nil` 이 됨
         }
     }
 }

@@ -28,7 +28,9 @@ struct StandupFormFeature: Reducer {
             
             /// 스탠덥에 적어도 한명의 참석자가 있어야 하므로
             if self.standup.attendees.isEmpty {
-                self.standup.attendees.append(Attendee(id: UUID()))
+                /// UUID 디펜던시 사용하기
+                @Dependency(\.uuid) var uuid
+                self.standup.attendees.append(Attendee(id: uuid()))
             }
         }
     }
@@ -112,7 +114,7 @@ struct StandupForm: View {
                     
                     ThemePicker(selection: viewStore.$standup.theme)
                 } header: {
-                    Text("회의 정보")
+                    Text("스탠드업 정보")
                 }
                 
                 Section {

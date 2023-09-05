@@ -254,3 +254,92 @@ var body: some View {
     }
 }
 ```
+
+
+# EPISODE. Navigation
+
+## Presentation
+
+```swift
+// State
+
+@PresentationState var addStandup: StandupFormFeature.State?
+```
+
+```swift
+// Action
+
+/// `PresentationAction` 에는 `dismiss` 와 `presented` 케이스가 있음
+case addStandup(PresentationAction<StandupFormFeature.Action>)
+```
+
+```swift
+// Reducer
+
+Reduce { state, action in
+    switch action {
+        case .addButtonTapped:
+            // 네비게이션 활성화
+            state.addStandup = StandupFormFeature.State(standup: Standup.empty)
+            return .none
+            
+        case .saveStandupButtonTapped:
+            // 부모와 통신
+            guard let standup = state.addStateup?.standup else {
+                return .none
+            }
+            state.standups.apped(standup)
+            
+            // 네비게이션 비활성화
+            state.addStandup = nil
+            return .none
+        }
+    }
+    .ifLet(\.$addStandup, action: /Action.addStandup) { // keyPath, casePath
+        StandupFormFeature()
+    }
+}
+```
+
+```swift
+// View
+
+/// `sheet(store:content:)` 사용
+.sheet(
+    /// `scope` 을 사용하여 `Store`의 범위를 **특정 부분에만 초점을** 맞출 수 있음
+    store: self.store.scope(
+        state: \.$addStandup,       // keyPath
+        action: { .addStandup($0) } // closure
+    )
+) { store in
+    StandupForm(store: store)
+} 
+/// **스와이프로 dismiss**하면 자동으로 `state.addStandup = nil` 이 됨
+```
+
+### scope
+
+`store.scope` 을 사용하여 `Store`의 범위를 **특정 부분에만 초점을** 맞출 수 있음
+
+### ifLet
+
+부모-자식 간의 Feature를 통합하여 서로간의 통신이 가능.
+
+예를 들어 부모가 언제 "참석자 추가" 버튼을 눌렀는지 알고 싶다면 아래와 같이 하면됨
+```swift
+case .addStandup(.presented(.addAttendeeButtonTapped)):
+    // do something
+```
+
+
+## 네비게이션 방식 (Navigation Styles)
+
+### 트리 기반 네비게이션 (Tree-based navigation)
+네비게이션 state를 옵셔널로 모델링 하는 것
+- nil 이면, 해당 feature로 네비게이트 하지 않음을 나타냄
+- 값이 존재하면, 네비게이션을 활성화함을 나타냄.
+sheet 에서 사용하는 방식. 
+
+### 스택 기반 네비게이션 (Stack-based navigation)
+state의 1차원 배열로 네비게이션 스택을 모델링 하는 것
+드릴 다운 네비게이션을 위한 방식으로. 스택에 값을 추가하는 방식에 대응.

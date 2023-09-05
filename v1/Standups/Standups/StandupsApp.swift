@@ -6,12 +6,20 @@
 //
 
 import SwiftUI
+import ComposableArchitecture
 
 @main
 struct StandupsApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            NavigationStack {
+                StandupsList(
+                    store: Store(
+                        initialState: StandupsListFeature.State(),
+                        reducer: { StandupsListFeature() }
+                    )
+                )
+            }
         }
     }
 }
