@@ -26,6 +26,7 @@
 		A995E9ED2AA740EC00CF469B /* StandupsListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A995E9EC2AA740EC00CF469B /* StandupsListTests.swift */; };
 		A995E9EF2AA745C500CF469B /* StandupDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A995E9EE2AA745C500CF469B /* StandupDetailView.swift */; };
 		A995E9F12AA74DDA00CF469B /* StandupDetailViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A995E9F02AA74DDA00CF469B /* StandupDetailViewTests.swift */; };
+		A9D8D93A2AABBC450039DB41 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D8D9392AABBC450039DB41 /* App.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +68,7 @@
 		A995E9EC2AA740EC00CF469B /* StandupsListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandupsListTests.swift; sourceTree = "<group>"; };
 		A995E9EE2AA745C500CF469B /* StandupDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandupDetailView.swift; sourceTree = "<group>"; };
 		A995E9F02AA74DDA00CF469B /* StandupDetailViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandupDetailViewTests.swift; sourceTree = "<group>"; };
+		A9D8D9392AABBC450039DB41 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -119,6 +121,7 @@
 			isa = PBXGroup;
 			children = (
 				A965D39A2AA0DD4500DDDF21 /* StandupsApp.swift */,
+				A9D8D9392AABBC450039DB41 /* App.swift */,
 				A965D3C42AA0E01800DDDF21 /* StandupsList.swift */,
 				A995E9EE2AA745C500CF469B /* StandupDetailView.swift */,
 				A965D3D52AA0E6D700DDDF21 /* StandupForm.swift */,
@@ -316,6 +319,7 @@
 			files = (
 				A965D3CA2AA0E0EC00DDDF21 /* Attendee.swift in Sources */,
 				A965D3CC2AA0E10800DDDF21 /* Meeting.swift in Sources */,
+				A9D8D93A2AABBC450039DB41 /* App.swift in Sources */,
 				A965D39D2AA0DD4500DDDF21 /* ContentView.swift in Sources */,
 				A965D3D42AA0E57400DDDF21 /* TrailingIconLabelStyle.swift in Sources */,
 				A965D3C52AA0E01800DDDF21 /* StandupsList.swift in Sources */,

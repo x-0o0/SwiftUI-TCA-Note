@@ -79,46 +79,52 @@ struct StandupsList: View {
     
     var body: some View {
         WithViewStore(self.store, observe: \.standups) { viewStore in
-            List {
-                ForEach(viewStore.state) { standup in
-                    CardView(standup: standup)
-                        .listRowBackground(standup.theme.mainColor)
-                }
-            }
-            .navigationTitle("일일 스탠드업")
-            .toolbar {
-                ToolbarItem {
-                    Button("추가") {
-                        viewStore.send(.addButtonTapped)
+            NavigationStack {
+                List {
+                    ForEach(viewStore.state) { standup in
+                        NavigationLink(
+                            state: AppFeature.Path.State.detail(StandupDetailFeature.State(standup: standup))
+                        ) {
+                            CardView(standup: standup)
+                        }
+                            .listRowBackground(standup.theme.mainColor)
                     }
                 }
-            }
-            .sheet(
-                /// `scope` 을 사용하여 `Store`의 범위를 **특정 부분에만 초점을** 맞출 수 있음
-                store: self.store.scope(
-                    state: \.$addStandup,       // keyPath
-                    action: { .addStandup($0) } // closure
-                )
-            ) { store in
-                NavigationStack {
-                    StandupForm(store: store)
-                        .navigationTitle("새로운 스탠드업")
-                        .toolbar {
-                            ToolbarItem {
-                                Button("저장") {
-                                    viewStore.send(.saveStandupButtonTapped)
-                                }
-                            }
-                            
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("취소") {
-                                    viewStore.send(.cancelStandupButtonTapped)
-                                }
-                            }
+                .navigationTitle("일일 스탠드업")
+                .toolbar {
+                    ToolbarItem {
+                        Button("추가") {
+                            viewStore.send(.addButtonTapped)
                         }
+                    }
                 }
-            } /// **스와이프로 dismiss**하면 자동으로 `state.addStandup = nil` 이 됨
-        }
+                .sheet(
+                    /// `scope` 을 사용하여 `Store`의 범위를 **특정 부분에만 초점을** 맞출 수 있음
+                    store: self.store.scope(
+                        state: \.$addStandup,       // keyPath
+                        action: { .addStandup($0) } // closure
+                    )
+                ) { store in
+                    NavigationStack {
+                        StandupForm(store: store)
+                            .navigationTitle("새로운 스탠드업")
+                            .toolbar {
+                                ToolbarItem {
+                                    Button("저장") {
+                                        viewStore.send(.saveStandupButtonTapped)
+                                    }
+                                }
+                                
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("취소") {
+                                        viewStore.send(.cancelStandupButtonTapped)
+                                    }
+                                }
+                            }
+                    }
+                } /// **스와이프로 dismiss**하면 자동으로 `state.addStandup = nil` 이 됨
+            }
+            }
     }
 }
 
