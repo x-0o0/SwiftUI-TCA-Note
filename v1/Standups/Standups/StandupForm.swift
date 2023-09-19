@@ -73,6 +73,9 @@ struct StandupFormFeature: Reducer {
                 guard let firstIndex = indices.first else {
                     return .none
                 }
+                /// `min({삭제한_인덱스}, {마지막_참석자_인덱스})`
+                /// [0, 1, 2, 3, 4] 중 3을 지우면 `min(3, 3)`. 따라서 `index = 3`
+                /// [0, 1, 2, 3, 4] 중 4를 지우면 `min(4, 3)`. 따라서 `index = 3`
                 let index = min(firstIndex, state.standup.attendees.count - 1)
                 state.focus = .attendee(state.standup.attendees[index].id)
                 return .none
