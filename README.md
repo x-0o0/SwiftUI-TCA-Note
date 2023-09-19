@@ -174,6 +174,7 @@ extension DependencyValues {
 ## Binding
 
 ### Basics
+
 ```swift
 // State
 @BindingState var standup: Standup
@@ -187,9 +188,22 @@ case binding(BindingAction<State>)
 var body: some ReducerOf<Self> {
     BindingReducer() // 먼저 실행. 들어온 Binding action 을 다루고 BindingState 값을 업데이트
 
-    Reduce { state, action in ... }
+    Reduce { state, action in
+    case .binding: // `BindingReducer` 에서 처리하기 때문에 `Reduce`에서는 처리할 필요 없음
+        return .none
+    // ...
+    }
 }
 ```
+1. `BindingReducer` 가 가장 먼저 실행되어서 뷰에서 Binding action을 전송 시, state 변경을 위한 로직을 처리.
+디테일한 변경 사항은 `onChange(of:)` 를 사용하여 접근할 수 있다.
+```swift
+BindingReducer()
+    .onChange(of: \.standup.title) { oldTitle, newTitle in
+        // ...
+    }
+```
+2. `BindingReducer` 가 Binding action 을 처리하기 때문에 `Reduce` 에서는 `.binding` 케이스의 액션에서는 아무것도 하지 않는다. 
 
 ```swift
 // View
@@ -211,15 +225,18 @@ Var body: some View {
 ```
 
 ### Focus
+
 ```swift
 // State
 @BindingState var focus: Field?
 
-enum Field: Hashable {
-    case attendee(Attendee.ID)
+enum Field: Hashable {  // ⭐️ `Hashable` 준수 잊지 말것!
+    case attendee(Attendee.ID) // 어떤 `attendee`(참석자)에 focus 할지
     case title
 }
 ```
+focus 에 사용하는 타입은 반드시 `Hashable` 를 준수하도록 해야함.
+
 ```swift
 // Action
 case binding(BindingAction<State>)
@@ -227,13 +244,20 @@ case binding(BindingAction<State>)
 ```swift
 // Reducer
 var body: some ReducerOf<Self> {
-    BindingReducer() // 먼저 실행. 들어온 Binding action 을 다루고 BindingState 값을 업데이트
+    BindingReducer()
 
     Reduce { state, action in
         switch action {
         case .addAttendeeButtonTapped:
-            // append new attendee to `state.standup` and then...
-            state.focus = .attendee(newAttend.id)
+            // `state.standup` 에 새 참석자(newAttendee)를 추가한 다음...
+            state.focus = .attendee(newAttendee.id)
+            return .none
+        case let .deleteAttendees(atOffsets: indices):
+            // 1. 참석자 제거하고
+            // 2. `state.standup.attendees` 가 비어있으면 새 참석자 추가한 다음...
+            let index = min(removedItemIndex, lastAttendeeIndex)
+            state.focus = .attendee(state.standup.attendees[index].id)
+            return .none
         }
     }
 }
@@ -243,17 +267,42 @@ var body: some ReducerOf<Self> {
 // View
 let store: StoreOf<StandupFeature>
 
-/// 1️⃣ 뷰에`.bind(_:to:)` 를 통해 store의 focus 를 self.focus 에 바인딩
+/// 1️⃣
 @FocusState var focus: StandupFeature.State.Field?
 
 var body: some View {
     WithViewStore(self.store, observe: { $0 }) { viewStore in
         TextField("제목", text: viewStore.$standup.title)
-            .focused(self.$focus, equals: .title) // 3️⃣ `focus` 값이 `.title` 이면 해당 텍스트필드에 초점 맞추기
-            .bind(viewStore.$focus, to: self.$focus) // 2️⃣
+            .focused(self.$focus, equals: .title) // 2️⃣ `focus` 값이 `.title` 이면 해당 텍스트필드에 초점 맞추기
+            .bind(viewStore.$focus, to: self.$focus) // 3️⃣
     }
 }
 ```
+> **중요**
+>
+> SwiftUI 의 API 인, `.focused(_:equals:)`의 첫번째 파라미터 타입을 보면 `Binding<...>` 이 아니라 `FocusState<...>.Binding` 이다.
+>
+> `Binding` 과는 다른 타입이기 때문에 `Binding<...>` 타입인 `viewStore.$focus` 를 쓸 수가 없다. (Vanilla SwiftUI 에서도 동일하게 적용되는 내용)
+>
+> 그래서 SwiftUI 에서는 `@FocusState` 키워드를 사용한 변수를 사용하도록 한다.
+
+1️⃣
+`focused(_:equals:)`에 사용하기 위해 `@FocusState` 키워드 변수를 선언하고 타입을 StandupFeature 에 선언했던 focus 와 동일하게 맞춘다. 
+```swift
+@FocusState var focus: StandupFeature.State.Field?
+```
+2️⃣
+선언한 `@FocusState` 변수를 `focused(_:equals:)` 에 사용
+```swift
+TextField("제목", text: viewStore.$standup.title)
+    .focused(self.$focus, equals: .title)
+```
+3️⃣
+`@FocusState` 로 선언한 변수와 `viewStore.$focus` 는 같은 목적을 갖지만 다른 변수이므로 서로 올바른 값을 가질 수 있도록 연결해준다.
+```swift
+.bind(viewStore.$focus, to: self.$focus)
+```
+이렇게 `bind(_:to:)` 를 사용하면, 어느 한쪽에 `.onChange` 가 불릴거나 `.onAppear` 가 호출될 때 상대방의 값도 동일하게 바꿔준다.
 
 
 # EPISODE. Navigation
