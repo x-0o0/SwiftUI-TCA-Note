@@ -24,6 +24,15 @@ struct StandupDetailFeature: Reducer {
         case cancelEditStandupButtonTapped
         case saveStandupButtonTapped
         case editStandup(PresentationAction<StandupFormFeature.Action>)
+        
+        // Delegate
+        case delegate(Delegate)
+        
+        enum Delegate {
+            // 부모 도메인에게 얘기하고자 하는 액션을 여기에 적어주면 됨
+            // 그러면 부모 도메인이 해당 delegate 액션을 listen 하고 있다가 정보가 들어오면 필요한 동작을 수행하게 됨
+            case standupUpdated(Standup)
+        }
     }
     
     var body: some ReducerOf<Self> {
@@ -55,10 +64,20 @@ struct StandupDetailFeature: Reducer {
                 
             case .editStandup:
                 return .none
+                
+            case .delegate:
+                // 자식 도메인은 절대로 delegate 액션에 대해서 아무것도 하지 말아야 한다.
+                return .none
             }
         }
         .ifLet(\.$editStandup, action: /Action.editStandup) {
             StandupFormFeature()
+        }
+        .onChange(of: \.standup) { oldValue, newValue in
+            // Custom 리듀서
+            Reduce { state, action in
+                return .send(.delegate(.standupUpdated(newValue)))
+            }
         }
     }
 }

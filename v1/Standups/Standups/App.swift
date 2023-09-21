@@ -9,7 +9,7 @@ import SwiftUI
 import ComposableArchitecture
 
 struct AppFeature: Reducer {
-    struct State {
+    struct State: Equatable {
         /// 어떤 feature가 현재 스택에서 돌아가는 중인지
         ///
         /// 스택은 다양한 타입의 화면을 표시할 수 있음.
@@ -29,7 +29,7 @@ struct AppFeature: Reducer {
     
     struct Path: Reducer {
         // 어떤 스크린이 스택에 있을 지에 대한 enum
-        enum State {
+        enum State: Equatable {
             case detail(StandupDetailFeature.State)
 //            case recordMeeting(RecordMeetingFeature.State)
         }
@@ -65,6 +65,14 @@ struct AppFeature: Reducer {
         
         Reduce { state, action in
             switch action {
+            
+            case let .path(.element(id: _, action: .detail(.delegate(action)))):
+                switch action {
+                case let .standupUpdated(standup):
+                    state.standupsList.standups[id: standup.id] = standup
+                    return .none
+                }
+                
             case .path:
                 return .none
                 

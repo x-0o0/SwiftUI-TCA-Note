@@ -607,3 +607,157 @@ NavigationLink(
 }
 ```
 `NavigationLink(state:)` 라는 새로운 생성자를 사용해서 `AppFeature.Path` 스택 상태를 `detail` 로 변경할 수 있음
+
+### 앱 실행시 즉각 네비게이션 실행하기
+**StandupsApp**
+```swift
+var body: some Scene {
+    WindowGroup {
+        var editedStandup = Standup.mock
+        let _ = editedStandup.title += "오전 싱크"
+        
+        AppView(
+            store: Store(
+                initialState: AppFeature.State(
+                    // 1️⃣ path 지정하여 푸시하기
+                    path: StackState([
+                        .detail(
+                            StandupDetailFeature.State(
+                                standup: .mocl,
+                                // 2️⃣ `editStandup` 값 넣어서 present sheet
+                                editStandup: StandupFormFeature.State(
+                                    focus: .attendee(editedStandup.atteendees[3].id),
+                                    standup: editiedStandup
+                                )
+                            )
+                        )
+                    ]),
+                    standupsList: ...
+                ),
+                reducer: { ... }
+            )
+        )
+    }
+}
+```
+- 1️⃣ path 지정해서 Detail 뷰로 드릴 다운 하기.
+- 2️⃣ `editStandup` 값 넣어서 Form 뷰 present 하기
+
+### Detail 뷰에서 Root 뷰로 신호 전달하기
+
+**AppFeature/body**
+```swift
+Reduce { state, action in
+    switch action {
+    
+    case let .path(.popFrom(id: id)):   // 1️⃣
+        // 2️⃣
+        guard case let .some(.detail(detailState)) = state.path[id: id] else {
+            return .none
+        }
+        // 3️⃣
+        state.standupsList.standups[id: detailState.standup.id] = detailState.standup
+        return .none
+    }
+    // ...
+}
+```
+
+- 1️⃣ `popFrom`: 뒤로가기 버튼을 누를 때 호출 된다. 여기서 전달받은 상태변화를 root 로 전달해주면 된다.
+- 2️⃣ 만약 pop 하는 상태가 `detail` 이면 해당 상태를 `detailState` 로 잡아서
+- 3️⃣ `detailState` 의 스탠드업 ID 에 해당하는 스탠드업을 `standupsList` 에서 가져와서 `detailState` 의 변경된 스탠드업으로 교체
+- 하지만 root 로 돌아오는 애니메이션이 완전히 종료될 때까지 root 의 상태가 바뀌지 않는다.
+    - 이 때는 `popFrom` 말고 `element(id:action)` 에서 `.saveStanupButtonTapped` 같은 액션을 처리하는 방식으로 하면 된다.
+    
+```swift
+Reduce { state, action in
+    switch action {
+    
+    case let .path(.element(id: id, action: .detail(.saveStandupButtonTapped))):
+        guard case let .some(.detail(detailState)) = state.path[id: id] else {
+            return .none
+        }
+        state.standupsList.standups[id: detailState.standup.id] = detailState.standup
+        return .none
+    }
+    // ...
+}
+```
+
+- 그러나, 부모 도메인이 자식 도메인을 가로채기 하는 것은 이상적이지 않음
+    - 부모 도메인이 로직을 올바르게 실행하기 위해서는 자식 도메인에서 무슨일이 일어나는 지를 너무 많이 알아야하기 때문
+    - 이 때는 `delegate` 액션을 사용하는 것이 좋다.
+
+### 델리게이트 액션
+
+**Action**
+```swift
+enum Action {
+    // Delegate
+    case delegate(Delegate)
+        
+    enum Delegate {
+        // 1️⃣
+        case standupUpdated(Standup)
+    }
+    
+    // ...
+}
+```
+- 1️⃣ 부모 도메인에게 얘기하고자 하는 액션을 `Delegate` enum 에 적어주면 됨
+- 그러면 부모 도메인이 해당 Delegate 액션을 listen 하고 있다가 정보가 들어오면 필요한 동작을 수행하게 됨
+
+**Reducer/body**
+```swift
+var body: some ReducerOf<Self> {
+    Reducer { state, action in
+    case .delegate:
+        // 1️⃣
+        return .none
+        
+    case .saveStandupButtonTapped:
+        // state.standup 업데이트
+        
+        // 2️⃣
+        return .send(.delegate(.standupUpdated(state.standup)))
+    }
+}
+```
+- 1️⃣ 자식 도메인은 절대로 delegate 액션에 대해서 아무것도 하지 말아야 한다.
+- 2️⃣ `send(_:)` 를 사용해서 `delegate` 액션 전달
+
+⭐️ 하지만 더 좋은 방법은 `state.standup` 의 변화를 감지하면 delegate 액션을 전달하는 것이다.
+
+**Reducer/body**
+
+```swift
+var body: some ReducerOf<Self> {
+    Reducer { state, action in
+    case .delegate:
+        return .none
+        
+    case .saveStandupButtonTapped:
+        return .none
+    }
+    .onChange(of: \.standup) { oldValue, newValue in
+        // 1️⃣
+        Reduce { state, action in
+            .send(.delegate(.standupUpdated(newValue)))
+        }
+    }
+}
+```
+- 1️⃣ 커스텀 리듀서
+
+**부모Feature/body**
+```swift
+Reduce { state, action in
+    case let .path(.element(id: _, action: .detail(.delegate(action)))):
+        switch action {
+        case let .standupUpdated(standup):
+            state.standupsList.standups[id: standup.id] = standup
+            return .none
+        }
+    }
+}
+```
