@@ -13,9 +13,12 @@ struct StandupDetailFeature: Reducer {
         var standup: Standup
         
         @PresentationState var editStandup: StandupFormFeature.State?
+
+        /// Alert
+        @PresentationState var alert: AlertState<Action.Alert>?
     }
     
-    enum Action {
+    enum Action: Equatable {
         case deleteButtonTapped
         case deleteMeetings(atOffsets: IndexSet)
         
@@ -24,13 +27,41 @@ struct StandupDetailFeature: Reducer {
         case cancelEditStandupButtonTapped
         case saveStandupButtonTapped
         case editStandup(PresentationAction<StandupFormFeature.Action>)
+        
+        // Delegate
+        case delegate(Delegate)
+        
+        enum Delegate: Equatable {
+            // 부모 도메인에게 얘기하고자 하는 액션을 여기에 적어주면 됨
+            // 그러면 부모 도메인이 해당 delegate 액션을 listen 하고 있다가 정보가 들어오면 필요한 동작을 수행하게 됨
+            case standupUpdated(Standup)
+        }
+        
+        // Alert
+        case alert(PresentationAction<Alert>)
+        
+        enum Alert {
+            case confirmDeletion
+        }
     }
     
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
             case .deleteButtonTapped:
+                if state.editStandup == nil, state.alert == nil {
+                    // 뭔가 하기
+                }
+                state.alert = AlertState {
+                    // title
+                    TextState("정말 삭제 하시겠습니까?")
+                } actions: {
+                    ButtonState(role: .destructive, action: .confirmDeletion) {
+                        TextState("삭제")
+                    }
+                }
                 return .none
+                
             case .deleteMeetings(atOffsets: let indices):
                 state.standup.meetings.remove(atOffsets: indices)
                 return .none
@@ -55,10 +86,29 @@ struct StandupDetailFeature: Reducer {
                 
             case .editStandup:
                 return .none
+                
+            case .delegate:
+                // 자식 도메인은 절대로 delegate 액션에 대해서 아무것도 하지 말아야 한다.
+                return .none
+                
+            case .alert(.presented(.confirmDeletion)):
+                // TODO: 현재 standup 제거
+                return .none
+                
+            case .alert(.dismiss):
+                return .none
             }
         }
+        .ifLet(\.$alert, action: /Action.alert) // Alert
         .ifLet(\.$editStandup, action: /Action.editStandup) {
+            // Stack
             StandupFormFeature()
+        }
+        .onChange(of: \.standup) { oldValue, newValue in
+            // Custom 리듀서
+            Reduce { state, action in
+                return .send(.delegate(.standupUpdated(newValue)))
+            }
         }
     }
 }
@@ -146,6 +196,12 @@ struct StandupDetailView: View {
                     viewStore.send(.editButtonTapped)
                 }
             }
+            .alert(
+                store: self.store.scope(
+                    state: \.$alert,
+                    action: { .alert($0) }
+                )
+            )
             .sheet(
                 store: self.store.scope(
                     state: \.$editStandup,

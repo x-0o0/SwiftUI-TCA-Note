@@ -319,10 +319,11 @@ TextField("제목", text: viewStore.$standup.title)
 
 ```swift
 // Action
-
-/// `PresentationAction` 에는 `dismiss` 와 `presented` 케이스가 있음
 case addStandup(PresentationAction<StandupFormFeature.Action>)
 ```
+`PresentationAction` 에는 2가지 작업 케이스가 있음.
+- `dismiss`
+- `presented`
 
 ```swift
 // Reducer
@@ -436,3 +437,449 @@ sheet 에서 사용하는 방식.
 ### 스택 기반 네비게이션 (Stack-based navigation)
 state의 1차원 배열로 네비게이션 스택을 모델링 하는 것
 드릴 다운 네비게이션을 위한 방식으로. 스택에 값을 추가하는 방식에 대응.
+
+
+# EPISODE. Stacks
+
+아래는 순수 SwiftUI 에서의 네비게이션 스택.
+
+```swift
+NavigationStack(path: Binding<_>, root: ()-> _) {
+    ...
+}
+```
+이걸 TCA 로 다루는 법을 배우는 에피소드
+
+## 네비게이션 스택
+
+### 근본: App Feature
+
+네비게이션 스택에서 띄워질 모든 feature들을 통합시킴
+정리해보자면
+- StandupsListFeature 은 가장 root 이기 때문에 pop 될 일이 없음
+- StandupDetailView는 이번에 드릴 다운 네비게이션을 할 대상
+- 그리고 회의 녹화 기능 같은 앞으로 배울 기능도 드릴 다운 대상  
+
+```swift
+struct AppFeature: Reducer {
+
+}
+```
+
+**State**
+```swift
+// AppFeature.struct
+struct State {
+    var standupsList = StandupsListFeature.State() // 항상 root 로 갖고 있어서 절대로 팝 될 일이 없음
+}
+```
+**Action**
+```swift
+enum Action {
+    case standupsList(StandupsListFeature.Action)
+}
+```
+**Reducer/Body**
+```swift
+Reduce { state, action in
+    switch action {
+    case .standupsList:
+        return .none
+    }
+}
+```
+`StandupsListFeature` 리듀서를 `AppFeature/body` 에 compose 할 방법을 이제 고민
+
+👉 이때 사용하는 것이 `Scope`
+
+`Scope` 은 부모로 부터 도메인 일부를 떼어내서 자식 리듀서를 실행
+
+```swift
+var body: some ReducerOf<Self> {
+    Scope(state: \.standupsList, action: /Action.standupsList) { 
+        StandupsListFeature() // 자식 리듀서 
+    }
+    
+    Reduce { ... }
+}
+```
+액션이 들어오면 `Scope` 의 child 리듀서에서 먼저 돌아가고 그 다음에 `AppFeature` 코어 로직인 `Reduce` 가 실행됨
+
+**Store**
+```swift
+// AppView.struct
+let store: StoreOf<AppFeature> // 1️⃣ full parent domain of app feature
+
+var body: some View {
+    NavigationStack {
+        StandupsListView(
+            store: self.store.scope( // 2️⃣ to pluck out the domain we're interested in, scope on the store
+                state: \.standupsList, 
+                action: { .standupsList($0) 
+            )
+        )
+    }
+}
+```
+
+### 푸시
+
+푸시를 위한 TCA 도구가 있음.
+
+**State**
+현재 어떤 feature가 스택에서 돌아가는지를 나타내기 위해 `StackState` 라는 것을 사용한 collection 변수를 선언
+```swift
+struct State {
+    var path = StackState<Path.State>()
+    // ...
+}
+```
+**Action**
+```swift
+enum Action {
+    case path(StackAction<Path.state, Path.Action>)
+    // ...
+}
+```
+`StackAction` 는 PresentationAction 과 동일
+- `element(id:action:)` 
+    - 다루고자 하는 스택 요소의 `id` 와 `action` 을 사용해서 스택의 자식 요소에 어떤 일이 일어나는지 나타낼 수 있음
+- `popFrom(id:)`
+    - 어떤 `id` 로 부터 팝
+- `push(id:state)`
+
+**Reducer/body**
+```swift
+Reduce { state, action in
+    switch action {
+    case .path: // 1️⃣
+        return .none
+    }
+}
+.forEach(\.path, action: /Action.path) { // 2️⃣
+    Path()
+}
+```
+- 1️⃣ `.path` 케이스에서 `.popFrom(id:)` 같은 액션을 전달해서 스택 요소를 팝할 수 있음
+- 2️⃣ `.forEach(_:action:destination:)`
+    - `destination`에는 모든 destination 을 캡슐화한 리듀서를 사용
+    - `$` 기호를 안쓰는 건 `StackState`가 프로퍼티 래퍼가 아니기 때문
+
+**Store**
+```swift
+var body: some View {
+    NavigationStackStore(
+        self.store.scope(state: \.path, action: { .path($0) })  // 1️⃣
+    ) {
+        // 2️⃣ root
+        StandupsListView(...)
+    } destination: { state in // 3️⃣
+        switch state {
+        case .detail:
+            CaseLet(    // 4️⃣
+                /AppFeature.Path.State.detail,
+                action: AppFeature.Path.Action.detail,
+                then: { StandupDetailView(store: $0) }
+            )
+        }
+    }
+}
+```
+- NavigationStackStore 에서는 3가지를 다룸
+    - 1️⃣ `store`: 네비게이션을 돌리기 위한 스택의 상태와 액션에 맞춘 store를 전달. 즉 `store.scope` 사용
+    - 2️⃣ `root`: root 뷰
+    - 3️⃣ `destination`: 스택에 푸시될 수 있는 모든 뷰의 destination
+        - 4️⃣ destination 뷰에 store 를 전달할 때는 `scope` 보다는 `CaseLet` 을 사용할 것. `scope` 은 복잡하기 때문
+
+**NavigationStackStore/destination**
+```swift
+// 미래의 TCA가 가질 모습: CaseLet 제거 하고 scope 사용하기
+destination: { store in
+    switch store.state {
+    case .detail:
+        if let store = store.scope(state: \.detail, action: { .detail($0) }) {
+            StandupDetailView(store: store)
+        }
+    }
+}
+```
+
+스택은 많은 스크린 타입을 다룰 수 있다. 그래야 Detail 스크린 말고도, 녹화 스크린, 지난 미팅 기록 스크린 으로도 드릴 다운 할 수 있다.
+
+따라서 다양한 위치들을 enum 을 사용해서 모델링 해야하고 각 스택의 대상을 단일 기능으로 패키징 하기 위해 `Path` 라는 새로운 리듀서를 정의.
+
+즉, Path 를 위한 State가 enum 인 리듀서를 생성
+```swift
+struct Path: Reducer {
+    enum State {
+        case detail(StandupDetailFeature.State)
+        // 그 외의 destination
+    }
+    
+    enum Action {
+        case detail(StandupDetailFeature.Action)
+    }
+    
+    var body: some ReducerOf<Self> {
+        // Scope 을 사용해서 모든 destination 의 리듀서를 compose 해야한다.
+        Scope(state: /State.detail, action: /Action.detail) {
+            StandupDetailFeature()
+        }
+    }
+}
+```
+앞으로 푸시해야할 새 feature가 생기면 `Path` 리듀서의 `State` 와 `Action` 에 `case` 를 추가하고 `body` 에 `Scope` 를 추가.
+```swift
+// Path.State.enum
++   case recordMeeting(RecordMeetingFeature.State)
+```
+```swift
+// Path.Action.enum
++   case recordMeeting(RecordMeetingFeature.State)
+```
+```swift
+// Path/body
++   Scope(state: /State.recordMeeting, action: /Action.recordMeeting) {
+        RecordMeetingFeature()
+    }
+}
+```
+
+**푸시 액션**
+```swift
+// StandupsListView/body
+
+NavigationLink(
+    state: AppFeature.Path.State.detail(
+        StandupDetailFeature.State(standup: standup)
+    )
+) {
+    CardView(standup: standup)
+}
+```
+`NavigationLink(state:)` 라는 새로운 생성자를 사용해서 `AppFeature.Path` 스택 상태를 `detail` 로 변경할 수 있음
+
+### 앱 실행시 즉각 네비게이션 실행하기
+**StandupsApp**
+```swift
+var body: some Scene {
+    WindowGroup {
+        var editedStandup = Standup.mock
+        let _ = editedStandup.title += "오전 싱크"
+        
+        AppView(
+            store: Store(
+                initialState: AppFeature.State(
+                    // 1️⃣ path 지정하여 푸시하기
+                    path: StackState([
+                        .detail(
+                            StandupDetailFeature.State(
+                                standup: .mocl,
+                                // 2️⃣ `editStandup` 값 넣어서 present sheet
+                                editStandup: StandupFormFeature.State(
+                                    focus: .attendee(editedStandup.atteendees[3].id),
+                                    standup: editiedStandup
+                                )
+                            )
+                        )
+                    ]),
+                    standupsList: ...
+                ),
+                reducer: { ... }
+            )
+        )
+    }
+}
+```
+- 1️⃣ path 지정해서 Detail 뷰로 드릴 다운 하기.
+- 2️⃣ `editStandup` 값 넣어서 Form 뷰 present 하기
+
+### Detail 뷰에서 Root 뷰로 신호 전달하기
+
+**AppFeature/body**
+```swift
+Reduce { state, action in
+    switch action {
+    
+    case let .path(.popFrom(id: id)):   // 1️⃣
+        // 2️⃣
+        guard case let .some(.detail(detailState)) = state.path[id: id] else {
+            return .none
+        }
+        // 3️⃣
+        state.standupsList.standups[id: detailState.standup.id] = detailState.standup
+        return .none
+    }
+    // ...
+}
+```
+
+- 1️⃣ `popFrom`: 뒤로가기 버튼을 누를 때 호출 된다. 여기서 전달받은 상태변화를 root 로 전달해주면 된다.
+- 2️⃣ 만약 pop 하는 상태가 `detail` 이면 해당 상태를 `detailState` 로 잡아서
+- 3️⃣ `detailState` 의 스탠드업 ID 에 해당하는 스탠드업을 `standupsList` 에서 가져와서 `detailState` 의 변경된 스탠드업으로 교체
+- 하지만 root 로 돌아오는 애니메이션이 완전히 종료될 때까지 root 의 상태가 바뀌지 않는다.
+    - 이 때는 `popFrom` 말고 `element(id:action)` 에서 `.saveStanupButtonTapped` 같은 액션을 처리하는 방식으로 하면 된다.
+    
+```swift
+Reduce { state, action in
+    switch action {
+    
+    case let .path(.element(id: id, action: .detail(.saveStandupButtonTapped))):
+        guard case let .some(.detail(detailState)) = state.path[id: id] else {
+            return .none
+        }
+        state.standupsList.standups[id: detailState.standup.id] = detailState.standup
+        return .none
+    }
+    // ...
+}
+```
+
+- 그러나, 부모 도메인이 자식 도메인을 가로채기 하는 것은 이상적이지 않음
+    - 부모 도메인이 로직을 올바르게 실행하기 위해서는 자식 도메인에서 무슨일이 일어나는 지를 너무 많이 알아야하기 때문
+    - 이 때는 `delegate` 액션을 사용하는 것이 좋다.
+
+### 델리게이트 액션
+
+**Action**
+```swift
+enum Action {
+    // Delegate
+    case delegate(Delegate)
+        
+    enum Delegate {
+        // 1️⃣
+        case standupUpdated(Standup)
+    }
+    
+    // ...
+}
+```
+- 1️⃣ 부모 도메인에게 얘기하고자 하는 액션을 `Delegate` enum 에 적어주면 됨
+- 그러면 부모 도메인이 해당 Delegate 액션을 listen 하고 있다가 정보가 들어오면 필요한 동작을 수행하게 됨
+
+**Reducer/body**
+```swift
+var body: some ReducerOf<Self> {
+    Reducer { state, action in
+    case .delegate:
+        // 1️⃣
+        return .none
+        
+    case .saveStandupButtonTapped:
+        // state.standup 업데이트
+        
+        // 2️⃣
+        return .send(.delegate(.standupUpdated(state.standup)))
+    }
+}
+```
+- 1️⃣ 자식 도메인은 절대로 delegate 액션에 대해서 아무것도 하지 말아야 한다.
+- 2️⃣ `send(_:)` 를 사용해서 `delegate` 액션 전달
+
+⭐️ 하지만 더 좋은 방법은 `state.standup` 의 변화를 감지하면 delegate 액션을 전달하는 것이다.
+
+**Reducer/body**
+
+```swift
+var body: some ReducerOf<Self> {
+    Reducer { state, action in
+    case .delegate:
+        return .none
+        
+    case .saveStandupButtonTapped:
+        return .none
+    }
+    .onChange(of: \.standup) { oldValue, newValue in
+        // 1️⃣
+        Reduce { state, action in
+            .send(.delegate(.standupUpdated(newValue)))
+        }
+    }
+}
+```
+- 1️⃣ 커스텀 리듀서
+
+**부모Feature/body**
+```swift
+Reduce { state, action in
+    case let .path(.element(id: _, action: .detail(.delegate(action)))):
+        switch action {
+        case let .standupUpdated(standup):
+            state.standupsList.standups[id: standup.id] = standup
+            return .none
+        }
+    }
+}
+```
+
+## Alert
+
+다음 API 를 사용하여 Alert 기능을 구현한다.
+- State: `PresentationState`, `AlertState` 
+- Action: `PresentationAlert`
+- Reducer: `AlertState`, `TextState`, `ButtonState`, `ifLet`
+- View: `alert(store:)` 
+
+**Action**
+
+```swift
+enum Alert {
+    case confirmDelete
+}
+case alert(PresentationAlert<Alert>)
+```
+
+**State**
+
+```swift
+@PresentationState var alert: AlertState<Action.Alert>?
+```
+
+**Reducer/body**
+
+```swift
+Reduce { state, action in
+    switch action{
+    // 삭제 버튼을 눌렀을 때
+    case .deleteButtonTapped:
+        state.alert = AlertState {
+            // title
+            TextState("정말 삭제하시겠습니까?")
+        } actions {
+            ButtonState(role: .destructive, action: .confirmDeletion) {
+                TextState("삭제")
+            }
+        }
+        return .none
+    
+    case .alert(.presented(.confirmDeletion):
+        return .none
+        
+    case .alert(.dismiss):
+        return .none
+    }
+    .ifLet(\.$alert, action: /Action.alert)
+}
+```
+
+**View**
+
+```swift
+.alert(
+    store: self.store.scope(
+        state: \.$alert,
+        action: { .alert($0) }
+    )
+)
+```
+
+## Multiple navigation
+> **문제**: 너무 많이 @PresentationState 의 옵셔널 타입 프로퍼티가 계속 늘어나고 한번에 관리해야한다면?
+
+```swift
+state.editStandup = ...
+state.alert = AlertState(...)
+```
+
+**해결책**: `enum` 을 사용하자 -> 열거형 네비게이션 `// 다음 에피소드`

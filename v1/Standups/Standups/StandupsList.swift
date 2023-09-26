@@ -23,7 +23,7 @@ struct StandupsListFeature: Reducer {
         @PresentationState var addStandup: StandupFormFeature.State?
     }
     
-    enum Action {
+    enum Action: Equatable {
         case addButtonTapped
         
         /// `PresentationAction` 에는 `dismiss` 와 `presented` 케이스가 있음
@@ -81,8 +81,12 @@ struct StandupsList: View {
         WithViewStore(self.store, observe: \.standups) { viewStore in
             List {
                 ForEach(viewStore.state) { standup in
-                    CardView(standup: standup)
-                        .listRowBackground(standup.theme.mainColor)
+                    NavigationLink(
+                        state: AppFeature.Path.State.detail(StandupDetailFeature.State(standup: standup))
+                    ) {
+                        CardView(standup: standup)
+                    }
+                    .listRowBackground(standup.theme.mainColor)
                 }
             }
             .navigationTitle("일일 스탠드업")
@@ -157,7 +161,7 @@ struct CardView: View {
     MainActor.assumeIsolated {
         NavigationStack {
             StandupsList(
-                store: .init(
+                store: Store(
                     initialState: StandupsListFeature.State(
                         standups: [Standup.mock]
                     ),

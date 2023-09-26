@@ -22,7 +22,7 @@ struct StandupFormFeature: Reducer {
             case title
         }
         
-        init(focus: Field? = nil, standup: Standup) {
+        init(focus: Field? = .title, standup: Standup) {
             self.focus = focus
             self.standup = standup
             
@@ -35,7 +35,7 @@ struct StandupFormFeature: Reducer {
         }
     }
     
-    enum Action: BindableAction {
+    enum Action: BindableAction, Equatable {
         case addAttendeeButtonTapped // insertAttendee ❌
         case deleteAttendees(atOffsets: IndexSet) // onDelete 에서 수행할 액션
         

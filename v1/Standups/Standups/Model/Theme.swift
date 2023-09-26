@@ -29,11 +29,10 @@ enum Theme: String, CaseIterable, Equatable, Hashable, Identifiable, Codable {
     
     var accentColor: Color {
         switch self {
-        case .bubblegum, .buttercup, .lavender, .orange, .periwinkle, .poppy, .seafoam, .sky, .tan,
-                .teal, .yellow:
-            return .black
         case .indigo, .magenta, .navy, .oxblood, .purple:
             return .white
+        default:
+            return .black
         }
     }
     
@@ -57,6 +56,7 @@ enum Theme: String, CaseIterable, Equatable, Hashable, Identifiable, Codable {
         case .yellow: return Color.yellow
         }
     }
+
     
     var name: String { self.rawValue.capitalized }
 }
