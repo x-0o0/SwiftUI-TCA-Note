@@ -761,3 +761,74 @@ Reduce { state, action in
     }
 }
 ```
+
+## Alert
+
+다음 API 를 사용하여 Alert 기능을 구현한다.
+- State: `PresentationState`, `AlertState` 
+- Action: `PresentationAlert`
+- Reducer: `AlertState`, `TextState`, `ButtonState`, `ifLet`
+- View: `alert(store:)` 
+
+**Action**
+
+```swift
+enum Alert {
+    case confirmDelete
+}
+case alert(PresentationAlert<Alert>)
+```
+
+**State**
+
+```swift
+@PresentationState var alert: AlertState<Action.Alert>?
+```
+
+**Reducer/body**
+
+```swift
+Reduce { state, action in
+    switch action{
+    // 삭제 버튼을 눌렀을 때
+    case .deleteButtonTapped:
+        state.alert = AlertState {
+            // title
+            TextState("정말 삭제하시겠습니까?")
+        } actions {
+            ButtonState(role: .destructive, action: .confirmDeletion) {
+                TextState("삭제")
+            }
+        }
+        return .none
+    
+    case .alert(.presented(.confirmDeletion):
+        return .none
+        
+    case .alert(.dismiss):
+        return .none
+    }
+    .ifLet(\.$alert, action: /Action.alert)
+}
+```
+
+**View**
+
+```swift
+.alert(
+    store: self.store.scope(
+        state: \.$alert,
+        action: { .alert($0) }
+    )
+)
+```
+
+## Multiple navigation
+> **문제**: 너무 많이 @PresentationState 의 옵셔널 타입 프로퍼티가 계속 늘어나고 한번에 관리해야한다면?
+
+```swift
+state.editStandup = ...
+state.alert = AlertState(...)
+```
+
+**해결책**: `enum` 을 사용하자 -> 열거형 네비게이션 `// 다음 에피소드`
