@@ -15,7 +15,7 @@ struct StandupDetailFeature: Reducer {
         @PresentationState var editStandup: StandupFormFeature.State?
     }
     
-    enum Action {
+    enum Action: Equatable {
         case deleteButtonTapped
         case deleteMeetings(atOffsets: IndexSet)
         
@@ -28,7 +28,7 @@ struct StandupDetailFeature: Reducer {
         // Delegate
         case delegate(Delegate)
         
-        enum Delegate {
+        enum Delegate: Equatable {
             // 부모 도메인에게 얘기하고자 하는 액션을 여기에 적어주면 됨
             // 그러면 부모 도메인이 해당 delegate 액션을 listen 하고 있다가 정보가 들어오면 필요한 동작을 수행하게 됨
             case standupUpdated(Standup)

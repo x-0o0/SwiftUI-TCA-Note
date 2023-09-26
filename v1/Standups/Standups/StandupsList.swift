@@ -23,7 +23,7 @@ struct StandupsListFeature: Reducer {
         @PresentationState var addStandup: StandupFormFeature.State?
     }
     
-    enum Action {
+    enum Action: Equatable {
         case addButtonTapped
         
         /// `PresentationAction` 에는 `dismiss` 와 `presented` 케이스가 있음

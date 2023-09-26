@@ -35,7 +35,7 @@ struct StandupFormFeature: Reducer {
         }
     }
     
-    enum Action: BindableAction {
+    enum Action: BindableAction, Equatable {
         case addAttendeeButtonTapped // insertAttendee ❌
         case deleteAttendees(atOffsets: IndexSet) // onDelete 에서 수행할 액션
         

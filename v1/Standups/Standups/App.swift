@@ -22,7 +22,7 @@ struct AppFeature: Reducer {
         var standupsList = StandupsListFeature.State()
     }
     
-    enum Action {
+    enum Action: Equatable {
         case path(StackAction<Path.State, Path.Action>)
         case standupsList(StandupsListFeature.Action)
     }
@@ -34,7 +34,7 @@ struct AppFeature: Reducer {
 //            case recordMeeting(RecordMeetingFeature.State)
         }
         
-        enum Action {
+        enum Action: Equatable {
             case detail(StandupDetailFeature.Action)
 //            case recordMeeting(RecordMeetingFeature.Action)
         }
