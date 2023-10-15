@@ -25,7 +25,13 @@ final class StandupDetailViewTests: XCTestCase {
         standup.title = "Point-Free Morning Sync"
         
         // title 바꾼 경우
-        await store.send(.editStandup(.presented(.set(\.$standup, standup))))
+        await store.send(
+            .destination(
+                .presented(
+                    .editStandup(.set(\.$standup, standup))
+                )
+            )
+        )
         
         // 저장버튼 누른 경우
         await store.send(.saveStandupButtonTapped) {
