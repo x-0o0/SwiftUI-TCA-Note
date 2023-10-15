@@ -31,12 +31,12 @@ struct AppFeature: Reducer {
         // 어떤 스크린이 스택에 있을 지에 대한 enum
         enum State: Equatable {
             case detail(StandupDetailFeature.State)
-//            case recordMeeting(RecordMeetingFeature.State)
+            case recordMeeting(RecordMeetingFeature.State)
         }
         
         enum Action: Equatable {
             case detail(StandupDetailFeature.Action)
-//            case recordMeeting(RecordMeetingFeature.Action)
+            case recordMeeting(RecordMeetingFeature.Action)
         }
         
         var body: some ReducerOf<Self> {
@@ -46,11 +46,11 @@ struct AppFeature: Reducer {
                 child: { StandupDetailFeature() }
             )
             
-//            Scope(
-//                state: /State.recordMeeting,
-//                action: /Action.recordMeeting,
-//                child: { RecordMeetingFeature() }
-//            )
+            Scope(
+                state: /State.recordMeeting,
+                action: /Action.recordMeeting,
+                child: { RecordMeetingFeature() }
+            )
         }
     }
     
@@ -70,6 +70,10 @@ struct AppFeature: Reducer {
                 switch action {
                 case let .standupUpdated(standup):
                     state.standupsList.standups[id: standup.id] = standup
+                    return .none
+                    
+                case let .deleteStandup(id: id):
+                    state.standupsList.standups.remove(id: id)
                     return .none
                 }
                 
@@ -110,6 +114,13 @@ struct AppView: View {
                     /AppFeature.Path.State.detail,
                     action: AppFeature.Path.Action.detail,
                     then: StandupDetailView.init(store:)
+                )
+                
+            case .recordMeeting:
+                CaseLet(
+                    /AppFeature.Path.State.recordMeeting,
+                    action: AppFeature.Path.Action.recordMeeting,
+                    then: RecordMeetingView.init(store:)
                 )
             }
         }

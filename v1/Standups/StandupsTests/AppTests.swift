@@ -48,7 +48,7 @@ final class AppTests: XCTestCase {
             )
         ) {
             /// mutate 하고 싶은 case 명시하가능
-            $0.path[id: 0, case: /AppFeature.Path.State.detail]?.editStandup = StandupFormFeature.State(standup: standup)
+            $0.path[id: 0, case: /AppFeature.Path.State.detail]?.destination = .editStandup(StandupFormFeature.State(standup: standup))
         }
         
         var editedStandup = standup
@@ -57,11 +57,14 @@ final class AppTests: XCTestCase {
             .path(
                 .element(
                     id: 0,
-                    action: .detail(.editStandup(.presented(.set(\.$standup, editedStandup))))
+                    action: .detail(.destination(.presented(.editStandup(.set(\.$standup, editedStandup)))))
                 )
             )
         ) {
-            $0.path[id: 0, case: /AppFeature.Path.State.detail]?.editStandup?.standup.title = "Point-Free Morning Sync"
+            /// - NOTE: 의견) 상당한 러닝커브로 인한 불편함
+            $0.path[id: 0, case: /AppFeature.Path.State.detail]?
+                .$destination[case: /StandupDetailFeature.Destination.State.editStandup]?
+                .standup.title = "Point-Free Morning Sync"
         }
         await store.send(
             .path(
@@ -71,7 +74,7 @@ final class AppTests: XCTestCase {
                 )
             )
         ) {
-            $0.path[id: 0, case: /AppFeature.Path.State.detail]?.editStandup = nil
+            $0.path[id: 0, case: /AppFeature.Path.State.detail]?.destination = nil
             $0.path[id: 0, case: /AppFeature.Path.State.detail]?.standup.title = "Point-Free Morning Sync"
         }
         
@@ -124,7 +127,7 @@ final class AppTests: XCTestCase {
             .path(
                 .element(
                     id: 0,
-                    action: .detail(.editStandup(.presented(.set(\.$standup, editedStandup))))
+                    action: .detail(.destination(.presented(.editStandup(.set(\.$standup, editedStandup)))))
                 )
             )
         )
@@ -140,6 +143,34 @@ final class AppTests: XCTestCase {
         await store.skipReceivedActions()
         store.assert {
             $0.standupsList.standups[0].title = "Point-Free Morning Sync"
+        }
+    }
+    
+    func test_deletion_nonExhaustive() async {
+        let standup = Standup.mock
+        let store = TestStore(
+            initialState: AppFeature.State(
+                path: StackState([
+                    .detail(StandupDetailFeature.State(standup: standup))
+                ]),
+                standupsList: StandupsListFeature.State(
+                    standups: [standup]
+                )
+            ),
+            reducer: { AppFeature() }
+        )
+        store.exhaustivity = .off
+        
+        // 삭제 버튼
+        await store.send(.path(.element(id: 0, action: .detail(.deleteButtonTapped))))
+        await store.send(.path(.element(id: 0, action: .detail(.destination(.presented(.alert(.confirmDeletion)))))))
+        
+        await store.skipReceivedActions()
+        store.assert {
+            // 자식 뷰 없음
+            $0.path = StackState([])
+            // 데이터 제거 되어 있음
+            $0.standupsList.standups = []
         }
     }
 }
