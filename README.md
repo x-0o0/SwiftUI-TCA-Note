@@ -883,3 +883,187 @@ state.alert = AlertState(...)
 ```
 
 **해결책**: `enum` 을 사용하자 -> 열거형 네비게이션 `// 다음 에피소드`
+
+
+# EPISODE. Domain Modeling
+
+## 개요
+
+네비게이션 대상이 4개라면 다음과 같이 실제 가능한 경우의 수는 5가지가 있다.
+| A | B | C | D | 설명 |
+| --- | --- | --- | --- | --- |
+| `nil` | `nil` | `nil` | `nil` | 기본 상태 |
+| `non-nil` | `nil` | `nil` | `nil` | A 가 보여짐 |
+| `nil` | `non-nil` | `nil` | `nil` | B 가 보여짐 |
+| `nil` | `nil` | `non-nil` | `nil` | C 가 보여짐 |
+| `nil` | `nil` | `nil` | `non-nil` | D 가 보여짐 |
+
+하지만, A, B, C, D 가 모두 옵셔널 타입이기 때문에 두개이상이 `non-nil` 이거나 전부다 `non-nil` 일 수도 있는 상황이 발생한다.
+
+총 경우의 수는 16가지고 여기서 70% 가 올바르지 않은 상태인 것이다.
+
+이에 적합한 도구가 `enum` 
+
+## Destination
+
+```swift
+// StandupDetailFeature
+
+struct State: Equatable {
+    @PresentationState var alert: AlertState<Action.Alert>?
+    @PresentationState var editStandup: StandupFormFeature.State?
+```
+
+`@PresentationState` 로 선언되었던 변수들을 `enum` 으로 관리하기 위해 앞서 스택 기반 네비게이션에서 다뤘던 `Path` 와 동일한 형태로
+`Destination` 이라는 reducer 를 선언한다.
+
+```swift
+struct Destination: Reducer
+```
+### State
+```swift
+enum State: Equatable {
+    case alert(AlertState<Action.Alert>)
+    case editStandup(StandupFormFeature.State)
+}
+```
+### Action
+```swift
+enum Action: Equatable {
+    case alert(Alert)
+    case editStandup(StandupFormFeature.Action)
+
+    enum Alert {
+        case confirmDeletion
+    }
+}
+```
+### Reducer/body
+```swift
+var body: some ReducerOf<Self> {
+    Scope(state: /State.editStandup, action: /Action.editStandup) {
+        StandupFormFeature()
+    }
+}
+```
+
+### 부모 리듀서
+```swift
+// StandupDetailFeature
+
+struct State: Equatable {
+    @PresentationState var destination: Destination.State?
+//    @PresentationState var alert: AlertState<Action.Alert>?
+//    @PresentationState var editStandup: StandupFormFeature.State?
+}
+
+enum Action: Equatable {
+    case destination(PresentationAction<Destination.Action>)
+//    case alert(PresentationAction<Alert>)
+//    case editStandup(PresentationAction<StandupFormFeature.Action>)
+}
+
+var body: some ReducerOf<Self> {
+    Reduce { state, action in
+        switch action {
+        case .cancelEditStandupButtonTapped:
+            state.destination = nil
+            return .none
+
+        case .deleteButtonTapped:
+            let alertState = AlertState(...)
+            state.destination = .alert(alertState)
+            return .none
+
+        case .editButtonTapped:
+            let standupForm = StandupFormFeature.State(standup: state.standup)
+            state.destination = .editStandup(standupForm)
+            return .none
+
+        case .saveStandupButtonTapped:
+            guard case let .editStandup(standupForm) = state.destination else { return .none }
+            state.standup = standupForm.standup
+            state.destination = nil
+            return .none
+
+        case .destination:
+            return .none
+        }
+    }
+    .ifLet(\.$destination, action: /Action.destination) {
+        Destination()
+    }
+}
+```
+
+### View
+```swift
+// alert 경우
+.alert(
+    store: self.store.scope(state: \.$destination, action: {  destination($0) }),
+    state: /StandupDetailFeature.Destination.State.alert,
+    action: StandupDetailFeature.Destination.Action.alert
+)
+// sheet 경우
+.sheet(
+    store: self.store.scope(state: \.$destination, action: { .destination($0) }),
+    state: /StandupDetailFeature.Destination.State.editStandup,
+    action: StandupDetailFeature.Destination.Action.editStandup
+) { store in
+    ...
+}
+```
+
+## Alert: Dismiss & 델리게이트
+
+SwiftUI에서의 `@Environment(\.dismiss) var dismiss` 처럼 TCA 에도 이에 해당하는 디펜던시가 있다.
+
+```swift
+@Dependency(\.dismiss) var dismiss
+```
+
+`ifLet` 이나 `forEach` 를 사용하여 띄워진 자식 리듀서에 dismiss 행동이 적용된다.
+
+```swift
+// 현재 스탠드업 제거 액션
+case .destination(.presented(.alert(.confirmDeletion))):
+    return .run { _ in
+        await self.dismiss()
+    }
+```
+
+### 부모와 소통
+
+**Action/Delegate**
+
+```swift
+enum Action: Equatable {
+    case delegate(Delegate)
+    enum Delegate: Equatable {
+        case deleteStandup(id: Standup.ID)
+    }
+}
+```
+
+**Reducer/body**
+
+```swift
+case .destination(.presented(.alert(.confirmDeletion))):
+    return .run { [id = state.standup.id] _ in
+        await send(.delegate(.deleteStandup(id: id)))
+        await self.dismiss()
+    } 
+```
+
+**ParentReducer/body**
+
+부모 리듀서에서 Delegate 액션 처리
+
+```swift
+case let .path(.element(id: _, action: .detail(.delegate(action)))):
+    switch action {
+    case let .deleteStandup(id: id):
+        state.standupsList.standups.remove(id: id)
+        return .none
+    }
+```
